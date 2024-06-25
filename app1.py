@@ -26,14 +26,21 @@ st.set_page_config(layout="wide", page_title="WEN-OKN")
 # Set up the title
 st.markdown("### &nbsp; WEN-OKN: Dive into Data, Never Easier")
 
-# Load datasets from CSV into a pandas DataFrame
-datasets_df = pd.read_csv('datasets.csv')  # Replace with your CSV file path
+# Load datasets from GC3datasets.csv into a pandas DataFrame
+datasets_csv_path = 'GC3datasets.csv'  # Replace with your CSV file path
+datasets_df = pd.read_csv(datasets_csv_path)
 
 # Dropdown to select dataset
 selected_dataset = st.selectbox('Select Dataset', datasets_df['dataset_name'])
 
-# Set dataset file path based on selection
+# Retrieve file path and schema based on selected dataset
 file_path = datasets_df.loc[datasets_df['dataset_name'] == selected_dataset, 'file_path'].iloc[0]
+
+# Check if schema information is available and use it if provided
+if 'schema' in datasets_df.columns:
+    schema = json.loads(datasets_df.loc[datasets_df['dataset_name'] == selected_dataset, 'schema'].iloc[0])
+    # Ensure schema is correctly formatted and used in your application
+    # Example: schema_headers = schema['schema_headers']
 
 # Set up datasets in the session for GeoDataframes
 if "datasets" not in st.session_state:
