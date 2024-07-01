@@ -1,5 +1,7 @@
 import time
 import json
+import io
+import requests
 import streamlit as st
 import pandas as pd
 from keplergl import keplergl
@@ -12,6 +14,18 @@ from request_router import get_question_route
 from request_plan import get_request_plan
 from dataframe_table import render_interface_for_table
 from data_commons import get_time_series_dataframe_for_dcid, get_dcid_from_county_name, get_dcid_from_state_name, get_dcid_from_country_name
+
+# Function to load data from API
+def load_data_from_api(api_url):
+    response = requests.get(api_url)
+    response.raise_for_status()  # Check for request errors
+    data = pd.read_csv(io.StringIO(response.text))
+    return data
+
+# Load the GC3datasets.csv file
+datasets_csv_path = 'GC3datasets1.csv'
+datasets_df = pd.read_csv(datasets_csv_path)
+st.session_state.datasets_df = datasets_df
 
 # Setup LLM
 Groq_KEY = st.secrets["Groq_KEY"]
@@ -26,23 +40,27 @@ st.set_page_config(layout="wide", page_title="WEN-OKN")
 # Set up the title
 st.markdown("### &nbsp; WEN-OKN: Dive into Data, Never Easier")
 
-# Load datasets from GC3datasets.csv into a pandas DataFrame
-datasets_csv_path = 'GC3datasets.csv'  # Replace with your CSV file path
-st.session_state.datasets_df = pd.read_csv(datasets_csv_path)
-# print (datasets_df["dataset_name"])
-
 # Dropdown to select dataset
 st.session_state.selected_dataset = st.selectbox('Select Dataset', datasets_df['dataset_name'])
-print(selected_dataset)
+print(st.session_state.selected_dataset)
 
-# Retrieve file path and schema based on selected dataset
-st.session_state.file_path = datasets_df.loc[datasets_df['dataset_name'] == selected_dataset, 'file_path'].iloc[0]
+# Retrieve dataset information based on selected dataset
+selected_dataset_info = datasets_df.loc[datasets_df['dataset_name'] == st.session_state.selected_dataset].iloc[0]
 
-# Check if schema information is available and use it if provided
-if 'schema' in datasets_df.columns:
-    st.session_state.schema = datasets_df.loc[datasets_df['dataset_name'] == selected_dataset, 'schema'].iloc[0]
-    # Ensure schema is correctly formatted and used in your application
-    # Example: schema_headers = schema['schema_headers']
+# Load data based on dataset_type
+if selected_dataset_info['dataset_type'] == 'dynamic':
+    api_url = selected_dataset_info['file_path']
+    if not api_url.startswith(('http://', 'https://')):
+        api_url = 'https://' + api_url
+    st.session_state.data_df = load_data_from_api(api_url)
+else:
+    st.session_state.data_df = pd.read_csv(selected_dataset_info['file_path'])
+
+# Extract schema from the dataframe if available
+if 'schema' in datasets_df.columns and pd.notnull(selected_dataset_info['schema']):
+    st.session_state.schema = selected_dataset_info['schema'].split(',')
+else:
+    st.session_state.schema = list(st.session_state.data_df.columns)
 
 # Set up datasets in the session for GeoDataframes
 if "datasets" not in st.session_state:
@@ -124,10 +142,6 @@ if len(st.session_state.sparqls) > 0:
                 st.markdown(f"**Request:**  {st.session_state.requests[idx]}")
                 st.code(sparql)
 
-# # Set up the Kepler map
-# with col1:
-#     map_config = add_map()
-
 # Set up the chat interface
 with col2:
     chat_container = st.container(height=355)
@@ -197,3 +211,4 @@ with col2:
 if st.session_state.rerun:
     st.session_state.rerun = False
     st.rerun()
+
